@@ -8,17 +8,15 @@ let editingId       = null;
 /* ─── SWITCH GAME TYPE (ML / FF) ────────────────────────────── */
 function switchGameType(type, el) {
   currentGameType = type;
-
   document.querySelectorAll('#game-type-tabs .inner-tab')
     .forEach(t => t.classList.remove('active'));
   el.classList.add('active');
-
   document.getElementById('form-ML').style.display = type === 'ML' ? '' : 'none';
   document.getElementById('form-FF').style.display = type === 'FF' ? '' : 'none';
 }
 
 /* ─── SUBMIT STOK BARU ──────────────────────────────────────── */
-function submitStock(game) {
+async function submitStock(game) {
   const type   = game.toLowerCase();
   const photos = [...photoBuffers[type]];
 
@@ -33,7 +31,6 @@ function submitStock(game) {
     ? document.getElementById('ml-bind').value.trim()
     : '';
 
-  // kumpulkan tags
   let tags = [];
   if (game === 'ML') {
     tags = [
@@ -50,7 +47,15 @@ function submitStock(game) {
     ];
   }
 
-  const newStock = addStock({ game, photos, price, desc, bind, tags });
+  // disable tombol saat loading
+  const btn = document.querySelector(`#form-${game} .btn-primary`);
+  if (btn) { btn.disabled = true; btn.textContent = 'MENYIMPAN...'; }
+
+  const newStock = await addStock({ game, photos, price, desc, bind, tags });
+
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> SIMPAN STOK ' + game; }
+
+  if (!newStock) return; // error sudah ditampilkan di addStock
 
   // reset form
   resetPhotoBuffer(type);
@@ -60,13 +65,16 @@ function submitStock(game) {
   renderAllTagSelectors();
 
   showNotif(`✓ Stok ${game} #${newStock.no} ditambahkan!`);
+
+  // refresh cache & UI
+  await refreshStockCache();
   renderStore();
   renderManageList();
 }
 
 /* ─── MANAGE LIST ───────────────────────────────────────────── */
 function renderManageList() {
-  const stocks = [...getStocks()].reverse();
+  const stocks = [..._stockCache].reverse();
   const el     = document.getElementById('manage-list');
   if (!el) return;
 
@@ -106,10 +114,11 @@ function renderManageList() {
 }
 
 /* ─── DELETE ─────────────────────────────────────────────────── */
-function handleDelete(id) {
-  const ok = deleteStock(id);
+async function handleDelete(id) {
+  const ok = await deleteStock(id);
   if (ok) {
     showNotif('✓ Stok dihapus');
+    await refreshStockCache();
     renderStore();
     renderManageList();
   }
@@ -120,21 +129,20 @@ function openEdit(id) {
   const s = getStockById(id);
   if (!s) return;
 
-  editingId       = id;
+  editingId        = id;
   editPhotoBuffers = [...s.photos];
 
-  // tag groups sesuai game
   const tagGroups = s.game === 'ML'
     ? [
-        { id: 'e-ml-rank',      label: 'Rank',      tags: TAGS.ML.rank      },
-        { id: 'e-ml-collector', label: 'Kolektor',   tags: TAGS.ML.collector },
-        { id: 'e-ml-emblem',    label: 'Emblem',     tags: TAGS.ML.emblem    },
-        { id: 'e-ml-skin',      label: 'Skin',       tags: TAGS.ML.skin      },
+        { id: 'e-ml-rank',      label: 'Rank',       tags: TAGS.ML.rank      },
+        { id: 'e-ml-collector', label: 'Kolektor',    tags: TAGS.ML.collector },
+        { id: 'e-ml-emblem',    label: 'Emblem',      tags: TAGS.ML.emblem    },
+        { id: 'e-ml-skin',      label: 'Skin',        tags: TAGS.ML.skin      },
       ]
     : [
-        { id: 'e-ff-rank',    label: 'Rank',         tags: TAGS.FF.rank    },
-        { id: 'e-ff-special', label: 'Pass & Special',tags: TAGS.FF.special },
-        { id: 'e-ff-collab',  label: 'Kolaborasi',   tags: TAGS.FF.collab  },
+        { id: 'e-ff-rank',    label: 'Rank',          tags: TAGS.FF.rank    },
+        { id: 'e-ff-special', label: 'Pass & Special', tags: TAGS.FF.special },
+        { id: 'e-ff-collab',  label: 'Kolaborasi',    tags: TAGS.FF.collab  },
       ];
 
   const bindField = s.game === 'ML' ? `
@@ -153,7 +161,6 @@ function openEdit(id) {
       <label>Deskripsi</label>
       <textarea id="e-desc" rows="3">${s.desc || ''}</textarea>
     </div>
-
     ${tagGroups.map(g => `
       <div class="form-group">
         <label>${g.label}</label>
@@ -162,7 +169,6 @@ function openEdit(id) {
         </div>
       </div>
     `).join('')}
-
     <div class="form-group">
       <label>Foto</label>
       <div class="upload-zone" onclick="document.getElementById('e-upload').click()">
@@ -172,8 +178,7 @@ function openEdit(id) {
       </div>
       <div class="photo-previews" id="e-previews"></div>
     </div>
-
-    <button class="btn btn-primary btn-full" onclick="saveEdit('${s.game}')">
+    <button class="btn btn-primary btn-full" id="edit-save-btn" onclick="saveEdit('${s.game}')">
       <i class="fa-solid fa-floppy-disk"></i> SIMPAN PERUBAHAN
     </button>
   `;
@@ -183,7 +188,7 @@ function openEdit(id) {
 }
 
 /* ─── EDIT MODAL: SIMPAN ────────────────────────────────────── */
-function saveEdit(game) {
+async function saveEdit(game) {
   if (!editingId) return;
 
   const tagGroupIds = game === 'ML'
@@ -197,16 +202,23 @@ function saveEdit(game) {
     ? (document.getElementById('e-bind')?.value.trim() || '')
     : '';
 
-  updateStock(editingId, {
+  const btn = document.getElementById('edit-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'MENYIMPAN...'; }
+
+  const ok = await updateStock(editingId, {
     price: parseInt(price) || 0,
-    desc,
-    bind,
-    tags,
+    desc, bind, tags,
     photos: editPhotoBuffers,
   });
 
+  if (!ok) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> SIMPAN PERUBAHAN'; }
+    return;
+  }
+
   closeEditModal();
   showNotif('✓ Stok berhasil diupdate');
+  await refreshStockCache();
   renderStore();
   renderManageList();
 }
