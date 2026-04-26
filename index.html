@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MEG STORE — ML & FF Account Stock</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ═══════ LOGIN SCREEN ═══════ -->
+  <div id="login-screen">
+    <div class="login-logo">
+      <span class="brand">MEG STORE</span>
+      <span class="sub">ML &amp; FF ACCOUNT STOCK</span>
+    </div>
+    <div class="login-box">
+      <label>Masukkan Nama</label>
+      <input type="text" id="login-name" placeholder="nama kamu..." autocomplete="off">
+      <button class="btn-enter" onclick="doLogin()">
+        <i class="fa-solid fa-arrow-right"></i> MASUK
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══════ APP WRAPPER ═══════ -->
+  <div id="app">
+
+    <!-- HEADER -->
+    <header>
+      <div class="header-brand">MEG<span>STORE</span></div>
+      <div class="header-right">
+        <div class="header-user">
+          <i class="fa-solid fa-circle-user"></i>
+          <span id="display-name">—</span>
+          <span class="badge-admin" id="admin-badge" style="display:none">ADMIN</span>
+        </div>
+        <button class="btn-logout" onclick="doLogout()">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- NAV TABS -->
+    <nav class="nav-tabs" id="main-nav">
+      <div class="nav-tab active" data-page="store" onclick="switchPage('store')">
+        <i class="fa-solid fa-layer-group"></i> STOK
+      </div>
+      <div class="nav-tab admin-only" data-page="admin" onclick="switchPage('admin')">
+        <i class="fa-solid fa-sliders"></i> ADMIN
+      </div>
+      <div class="nav-tab admin-only" data-page="settings" onclick="switchPage('settings')">
+        <i class="fa-solid fa-gear"></i> SETTING
+      </div>
+    </nav>
+
+    <!-- ═══════ PAGE: STORE (user) ═══════ -->
+    <div id="page-store" class="page-section active">
+      <div class="container">
+        <div class="search-row">
+          <div class="search-wrap">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="search-input" placeholder="cari akun..." oninput="renderStore()">
+          </div>
+          <select class="filter-select" id="filter-game" onchange="renderStore()">
+            <option value="all">Semua Game</option>
+            <option value="ML">Mobile Legends</option>
+            <option value="FF">Free Fire</option>
+          </select>
+          <select class="filter-select" id="filter-sort" onchange="renderStore()">
+            <option value="newest">Terbaru</option>
+            <option value="price-asc">Harga ↑</option>
+            <option value="price-desc">Harga ↓</option>
+          </select>
+        </div>
+        <div class="stock-grid" id="stock-grid"></div>
+      </div>
+    </div>
+
+    <!-- ═══════ PAGE: ADMIN ═══════ -->
+    <div id="page-admin" class="page-section">
+      <div class="container">
+
+        <div class="section-title"><i class="fa-solid fa-plus"></i> TAMBAH STOK</div>
+
+        <!-- Game type switcher -->
+        <div class="inner-tabs" id="game-type-tabs">
+          <div class="inner-tab active" onclick="switchGameType('ML', this)">
+            <i class="fa-solid fa-sword"></i> Mobile Legends
+          </div>
+          <div class="inner-tab" onclick="switchGameType('FF', this)">
+            <i class="fa-solid fa-gun"></i> Free Fire
+          </div>
+        </div>
+
+        <!-- ML FORM -->
+        <div id="form-ML" class="admin-grid">
+          <div class="admin-card">
+            <h3><i class="fa-solid fa-image"></i> FOTO & INFO</h3>
+            <div class="form-group">
+              <label>Upload Foto (Profil, Skin, Emblem, dll)</label>
+              <div class="upload-zone" onclick="document.getElementById('ml-photos').click()">
+                <input type="file" id="ml-photos" accept="image/*" multiple onchange="handlePhotos('ml', this)">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <p>klik untuk upload foto</p>
+              </div>
+              <div class="photo-previews" id="ml-previews"></div>
+            </div>
+            <div class="form-group">
+              <label>Harga (Rp)</label>
+              <input type="number" id="ml-price" placeholder="150000">
+            </div>
+            <div class="form-group">
+              <label>Bind / Platform</label>
+              <input type="text" id="ml-bind" placeholder="cth: Gmail, Moonton, Unlink">
+            </div>
+            <div class="form-group">
+              <label>Deskripsi</label>
+              <textarea id="ml-desc" rows="4" placeholder="detail akun, jumlah hero, skin, dll..."></textarea>
+            </div>
+          </div>
+
+          <div class="admin-card">
+            <h3><i class="fa-solid fa-tags"></i> TAGS ML</h3>
+            <div class="form-group">
+              <label>Rank</label>
+              <div class="tag-selector" id="ml-tags-rank"></div>
+            </div>
+            <div class="form-group">
+              <label>Kolektor</label>
+              <div class="tag-selector" id="ml-tags-collector"></div>
+            </div>
+            <div class="form-group">
+              <label>Emblem</label>
+              <div class="tag-selector" id="ml-tags-emblem"></div>
+            </div>
+            <div class="form-group">
+              <label>Skin Series</label>
+              <div class="tag-selector" id="ml-tags-skin"></div>
+            </div>
+          </div>
+
+          <div style="grid-column:1/-1">
+            <button class="btn btn-primary btn-full" onclick="submitStock('ML')">
+              <i class="fa-solid fa-floppy-disk"></i> SIMPAN STOK ML
+            </button>
+          </div>
+        </div>
+
+        <!-- FF FORM -->
+        <div id="form-FF" class="admin-grid" style="display:none">
+          <div class="admin-card">
+            <h3><i class="fa-solid fa-image"></i> FOTO & INFO</h3>
+            <div class="form-group">
+              <label>Upload Foto (Profil, Bundle, Evo Gun, dll)</label>
+              <div class="upload-zone" onclick="document.getElementById('ff-photos').click()">
+                <input type="file" id="ff-photos" accept="image/*" multiple onchange="handlePhotos('ff', this)">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <p>klik untuk upload foto</p>
+              </div>
+              <div class="photo-previews" id="ff-previews"></div>
+            </div>
+            <div class="form-group">
+              <label>Harga (Rp)</label>
+              <input type="number" id="ff-price" placeholder="200000">
+            </div>
+            <div class="form-group">
+              <label>Deskripsi</label>
+              <textarea id="ff-desc" rows="4" placeholder="detail akun, bundle, senjata, dll..."></textarea>
+            </div>
+          </div>
+
+          <div class="admin-card">
+            <h3><i class="fa-solid fa-tags"></i> TAGS FF</h3>
+            <div class="form-group">
+              <label>Rank</label>
+              <div class="tag-selector" id="ff-tags-rank"></div>
+            </div>
+            <div class="form-group">
+              <label>Pass &amp; Special</label>
+              <div class="tag-selector" id="ff-tags-special"></div>
+            </div>
+            <div class="form-group">
+              <label>Kolaborasi</label>
+              <div class="tag-selector" id="ff-tags-collab"></div>
+            </div>
+          </div>
+
+          <div style="grid-column:1/-1">
+            <button class="btn btn-primary btn-full" onclick="submitStock('FF')">
+              <i class="fa-solid fa-floppy-disk"></i> SIMPAN STOK FF
+            </button>
+          </div>
+        </div>
+
+        <!-- MANAGE LIST -->
+        <div style="margin-top:36px">
+          <div class="section-title"><i class="fa-solid fa-list"></i> KELOLA STOK</div>
+          <div class="manage-list" id="manage-list"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═══════ PAGE: SETTINGS ═══════ -->
+    <div id="page-settings" class="page-section">
+      <div class="container">
+        <div class="section-title"><i class="fa-solid fa-gear"></i> PENGATURAN</div>
+
+        <div class="admin-card" style="margin-bottom:16px">
+          <h3><i class="fa-brands fa-whatsapp"></i> WHATSAPP ADMIN</h3>
+          <div class="form-group">
+            <label>Nomor WA (format: 628xxx)</label>
+            <input type="text" id="wa-number" placeholder="6281234567890">
+          </div>
+          <button class="btn btn-primary" onclick="saveSetting('waNumber', document.getElementById('wa-number').value)">
+            <i class="fa-solid fa-check"></i> SIMPAN
+          </button>
+        </div>
+
+        <div class="admin-card" style="margin-bottom:16px">
+          <h3><i class="fa-solid fa-key"></i> NAMA ADMIN (PASSWORD LOGIN)</h3>
+          <div class="form-group">
+            <label>Nama yang bisa login sebagai admin</label>
+            <input type="text" id="admin-name-setting" placeholder="Meg">
+          </div>
+          <button class="btn btn-primary" onclick="saveSetting('adminName', document.getElementById('admin-name-setting').value)">
+            <i class="fa-solid fa-check"></i> SIMPAN
+          </button>
+        </div>
+
+        <div class="admin-card">
+          <h3><i class="fa-solid fa-tag"></i> IKON TAG KUSTOM</h3>
+          <p style="font-size:10px;color:var(--text3);margin-bottom:14px;letter-spacing:1px">
+            Masukkan URL foto (12×12px recommended) untuk setiap tag. Kosongi = tanpa ikon.
+          </p>
+          <div class="settings-grid" id="tag-icon-settings"></div>
+          <button class="btn btn-primary" style="margin-top:14px" onclick="saveTagIcons()">
+            <i class="fa-solid fa-check"></i> SIMPAN SEMUA IKON
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /app -->
+
+  <!-- ═══════ MODAL: DETAIL STOK ═══════ -->
+  <div class="modal-overlay" id="detail-modal" onclick="closeModalBg(event,'detail-modal','closeDetailModal')">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="modal-title">—</h3>
+        <button class="modal-close" onclick="closeDetailModal()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="photo-gallery" id="modal-gallery"></div>
+        <div class="detail-row" id="modal-detail"></div>
+        <div class="detail-price" id="modal-price"></div>
+        <button class="btn-buy" id="modal-buy-btn">
+          <i class="fa-brands fa-whatsapp"></i> BUY VIA WHATSAPP
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ MODAL: EDIT STOK ═══════ -->
+  <div class="modal-overlay" id="edit-modal" onclick="closeModalBg(event,'edit-modal','closeEditModal')">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>EDIT STOK</h3>
+        <button class="modal-close" onclick="closeEditModal()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body" id="edit-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- ═══════ LIGHTBOX ═══════ -->
+  <div id="lightbox" onclick="closeLightbox()">
+    <button id="lightbox-close" onclick="closeLightbox()"><i class="fa-solid fa-xmark"></i></button>
+    <img id="lightbox-img" src="" alt="">
+  </div>
+
+  <!-- ═══════ NOTIFICATION ═══════ -->
+  <div id="notif"></div>
+
+  <!-- ═══════ SCRIPTS ═══════ -->
+  <script src="js/config.js"></script>
+  <script src="js/tags.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/ui-store.js"></script>
+  <script src="js/ui-admin.js"></script>
+  <script src="js/ui-settings.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+</html>
