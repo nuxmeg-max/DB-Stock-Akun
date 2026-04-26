@@ -2,10 +2,18 @@
    app.js — Login, logout, navigasi, remember name, init
    ════════════════════════════════════════════════════════════ */
 
-const SESSION_KEY  = 'meg_session_name';   // nama yang diingat di browser
+const SESSION_KEY = 'meg_session_name';
 
 let currentUser = null;
 let isAdmin     = false;
+
+/* ════════════════════════════════════════════════════════════
+   STOCK CACHE — refresh dari API
+   ════════════════════════════════════════════════════════════ */
+
+async function refreshStockCache() {
+  _stockCache = await getStocks();
+}
 
 /* ════════════════════════════════════════════════════════════
    LOGIN & LOGOUT
@@ -16,40 +24,33 @@ function doLogin() {
   const name  = input.value.trim();
   if (!name) return;
 
-  const adminName = getAdminName();
+  const adminName = getSetting('adminName', CONFIG.DEFAULT_ADMIN_NAME);
   currentUser = name;
   isAdmin     = name.toLowerCase() === adminName.toLowerCase();
 
-  // simpan nama ke localStorage agar diingat
   localStorage.setItem(SESSION_KEY, name);
-
   applySession();
 }
 
 function doLogout() {
-  // hapus sesi yang disimpan
   localStorage.removeItem(SESSION_KEY);
-
   currentUser = null;
   isAdmin     = false;
 
-  // reset UI
   document.getElementById('login-name').value = '';
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('app').classList.remove('visible');
 
-  // kembali ke halaman store
   switchPage('store');
 }
 
-/* ─── TERAPKAN SESI SETELAH LOGIN ───────────────────────────── */
+/* ─── TERAPKAN SESI ─────────────────────────────────────────── */
 function applySession() {
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app').classList.add('visible');
   document.getElementById('display-name').textContent = currentUser;
 
-  const adminBadge = document.getElementById('admin-badge');
-  adminBadge.style.display = isAdmin ? '' : 'none';
+  document.getElementById('admin-badge').style.display = isAdmin ? '' : 'none';
 
   const nav = document.getElementById('main-nav');
   if (isAdmin) nav.classList.add('is-admin');
@@ -59,23 +60,18 @@ function applySession() {
 }
 
 /* ════════════════════════════════════════════════════════════
-   NAVIGASI HALAMAN
+   NAVIGASI
    ════════════════════════════════════════════════════════════ */
 
 function switchPage(page) {
-  // sembunyikan semua page
   document.querySelectorAll('.page-section')
     .forEach(s => s.classList.remove('active'));
-
-  // nonaktifkan semua tab
   document.querySelectorAll('.nav-tab')
     .forEach(t => t.classList.remove('active'));
 
-  // tampilkan page yang dipilih
   document.getElementById('page-' + page)?.classList.add('active');
   document.querySelector(`[data-page="${page}"]`)?.classList.add('active');
 
-  // render konten sesuai page
   if (page === 'admin') {
     renderAllTagSelectors();
     renderManageList();
@@ -86,28 +82,32 @@ function switchPage(page) {
 }
 
 /* ════════════════════════════════════════════════════════════
-   INIT — dijalankan saat halaman pertama kali dibuka
+   INIT
    ════════════════════════════════════════════════════════════ */
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
 
-  // ─── cek apakah ada nama yang tersimpan ─────────────────────
+  // 1. Load settings dari API (waNumber, tagIcons)
+  _settingsCache = await fetchPublicSettings();
+
+  // 2. Load semua stok ke cache
+  setGridLoading(true);
+  await refreshStockCache();
+
+  // 3. Cek sesi tersimpan (remember name)
   const savedName = localStorage.getItem(SESSION_KEY);
-
   if (savedName) {
-    // langsung login tanpa perlu isi nama lagi
-    const adminName = getAdminName();
+    const adminName = getSetting('adminName', CONFIG.DEFAULT_ADMIN_NAME);
     currentUser = savedName;
     isAdmin     = savedName.toLowerCase() === adminName.toLowerCase();
-
-    // isi input juga (kalau user sempat lihat)
     document.getElementById('login-name').value = savedName;
-
     applySession();
+  } else {
+    // tidak ada sesi — tampilkan login, tapi render store dulu biar siap
+    renderStore();
   }
-  // kalau tidak ada sesi → tampilkan login screen (default)
 
-  // ─── Enter key di login input ────────────────────────────────
+  // 4. Enter key di input login
   document.getElementById('login-name')
     .addEventListener('keydown', e => {
       if (e.key === 'Enter') doLogin();
