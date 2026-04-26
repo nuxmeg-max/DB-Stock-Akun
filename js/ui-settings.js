@@ -4,28 +4,41 @@
 
 /* ─── RENDER HALAMAN SETTINGS ───────────────────────────────── */
 function renderSettingsPage() {
+  // ambil dari cache settings yang sudah di-load saat init
   document.getElementById('wa-number').value =
-    getSetting('waNumber', CONFIG.DEFAULT_WA_NUMBER);
+    _settingsCache.waNumber || CONFIG.DEFAULT_WA_NUMBER;
   document.getElementById('admin-name-setting').value =
-    getSetting('adminName', CONFIG.DEFAULT_ADMIN_NAME);
+    getSetting('adminName', CONFIG.DEFAULT_ADMIN_NAME); // adminName tetap localStorage (keamanan)
 
   renderTagIconSettings();
 }
 
-/* ─── SIMPAN SETTING ─────────────────────────────────────────── */
-function saveSetting(key, val) {
-  if (!val.trim()) {
-    showNotif('⚠ Tidak boleh kosong');
-    return;
+/* ─── SIMPAN WA / ADMIN NAME ─────────────────────────────────── */
+async function saveSetting(key, val) {
+  if (!val.trim()) { showNotif('⚠ Tidak boleh kosong'); return; }
+
+  if (key === 'waNumber') {
+    // simpan ke KV via API
+    const ok = await postSettings({ waNumber: val.trim() });
+    if (ok) {
+      _settingsCache.waNumber = val.trim();
+      showNotif('✓ Nomor WA tersimpan');
+    } else {
+      showNotif('⚠ Gagal menyimpan');
+    }
   }
-  setSetting(key, val.trim());
-  showNotif('✓ Tersimpan');
+
+  if (key === 'adminName') {
+    // adminName disimpan di localStorage saja (tidak dikirim ke API agar aman)
+    setSetting('adminName', val.trim());
+    showNotif('✓ Nama admin tersimpan');
+  }
 }
 
 /* ─── RENDER TAG ICON SETTINGS ──────────────────────────────── */
 function renderTagIconSettings() {
   const allTags = getAllTags();
-  const icons   = getTagIcons();
+  const icons   = getTagIcons(); // dari _settingsCache
   const el      = document.getElementById('tag-icon-settings');
   if (!el) return;
 
@@ -64,23 +77,25 @@ function previewTagIcon(input) {
     prev.onerror = () => { prev.style.display = 'none'; };
     prev.style.display = '';
   } else {
-    if (prev && prev.classList.contains('setting-preview')) {
-      prev.remove();
-    }
+    if (prev && prev.classList.contains('setting-preview')) prev.remove();
   }
 }
 
 /* ─── SIMPAN SEMUA IKON TAG ─────────────────────────────────── */
-function saveTagIcons() {
+async function saveTagIcons() {
   const icons = {};
   document.querySelectorAll('.ti-input').forEach(inp => {
     const val = inp.value.trim();
     if (val) icons[inp.dataset.tag] = val;
   });
-  localStorage.setItem('meg_tagicons', JSON.stringify(icons));
 
-  // refresh semua tag selector & store agar ikon muncul
-  renderAllTagSelectors();
-  renderStore();
-  showNotif('✓ Ikon tag tersimpan');
+  const ok = await postSettings({ tagIcons: icons });
+  if (ok) {
+    _settingsCache.tagIcons = icons; // update cache lokal
+    renderAllTagSelectors();
+    renderStore();
+    showNotif('✓ Ikon tag tersimpan');
+  } else {
+    showNotif('⚠ Gagal menyimpan ikon');
+  }
 }
