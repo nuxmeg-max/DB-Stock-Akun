@@ -1,90 +1,133 @@
 /* ════════════════════════════════════════════════════════════
-   data.js — CRUD stok (baca, simpan, hapus, edit)
-   Semua operasi data ada di sini
+   data.js — CRUD stok via API (Vercel KV)
+   Semua data sekarang disimpan di cloud, bukan localStorage
    ════════════════════════════════════════════════════════════ */
 
-const STORAGE_KEY = 'meg_stocks';
+/* ════════════════════════════════════════════════════════════
+   API CALLS
+   ════════════════════════════════════════════════════════════ */
 
-/* ─── READ ──────────────────────────────────────────────────── */
-function getStocks() {
+/* ─── GET semua stok ────────────────────────────────────────── */
+async function getStocks() {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-  } catch {
+    const res  = await fetch('/api/stocks');
+    const json = await res.json();
+    return json.ok ? json.data : [];
+  } catch (err) {
+    console.error('getStocks error:', err);
     return [];
   }
 }
 
+/* ─── GET stok by ID (dari cache lokal) ─────────────────────── */
+// dipanggil setelah getStocks() load data ke _stockCache
+let _stockCache = [];
 function getStockById(id) {
-  return getStocks().find(s => s.id === id) || null;
+  return _stockCache.find(s => s.id === id) || null;
 }
 
-/* ─── WRITE ─────────────────────────────────────────────────── */
-function saveStocks(arr) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+/* ─── ADD stok baru ─────────────────────────────────────────── */
+async function addStock({ game, photos, price, desc, bind, tags }) {
+  try {
+    const res  = await fetch('/api/stocks', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ game, photos, price, desc, bind, tags }),
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error);
+    return json.data;
+  } catch (err) {
+    console.error('addStock error:', err);
+    showNotif('⚠ Gagal menyimpan stok');
+    return null;
+  }
 }
 
-/* ─── RENUMBER: atur ulang nomor per game ───────────────────── */
-function renumberAndSave(arr) {
-  const ml = arr.filter(s => s.game === 'ML').map((s, i) => ({ ...s, no: i + 1 }));
-  const ff = arr.filter(s => s.game === 'FF').map((s, i) => ({ ...s, no: i + 1 }));
-  const result = [...ml, ...ff];
-  saveStocks(result);
-  return result;
+/* ─── UPDATE stok ───────────────────────────────────────────── */
+async function updateStock(id, changes) {
+  try {
+    const res  = await fetch(`/api/stock?id=${id}`, {
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(changes),
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error);
+    return true;
+  } catch (err) {
+    console.error('updateStock error:', err);
+    showNotif('⚠ Gagal update stok');
+    return false;
+  }
 }
 
-/* ─── ADD ───────────────────────────────────────────────────── */
-function addStock({ game, photos, price, desc, bind, tags }) {
-  const stocks = getStocks();
-
-  // hitung nomor berikutnya untuk game ini
-  const sameGame = stocks.filter(s => s.game === game);
-  const no = sameGame.length + 1;
-
-  const newStock = {
-    id:        Date.now(),
-    no,
-    game,
-    photos:    photos   || [],
-    price:     parseInt(price) || 0,
-    desc:      desc     || '',
-    bind:      bind     || '',   // hanya ML
-    tags:      tags     || [],
-    createdAt: Date.now(),
-  };
-
-  stocks.push(newStock);
-  saveStocks(stocks);
-  return newStock;
-}
-
-/* ─── UPDATE ────────────────────────────────────────────────── */
-function updateStock(id, changes) {
-  const stocks = getStocks();
-  const idx = stocks.findIndex(s => s.id === id);
-  if (idx === -1) return false;
-  stocks[idx] = { ...stocks[idx], ...changes };
-  saveStocks(stocks);
-  return true;
-}
-
-/* ─── DELETE ────────────────────────────────────────────────── */
-function deleteStock(id) {
+/* ─── DELETE stok ───────────────────────────────────────────── */
+async function deleteStock(id) {
   if (!confirm('Hapus stok ini?')) return false;
-  const stocks = getStocks().filter(s => s.id !== id);
-  renumberAndSave(stocks);
-  return true;
+  try {
+    const res  = await fetch(`/api/stock?id=${id}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error);
+    return true;
+  } catch (err) {
+    console.error('deleteStock error:', err);
+    showNotif('⚠ Gagal menghapus stok');
+    return false;
+  }
 }
 
-/* ─── FILTER & SORT (untuk tampilan store) ──────────────────── */
-function getFilteredStocks({ query = '', game = 'all', sort = 'newest' } = {}) {
-  let stocks = getStocks();
+/* ════════════════════════════════════════════════════════════
+   SETTINGS VIA API
+   ════════════════════════════════════════════════════════════ */
 
-  // filter game
+/* ─── GET settings publik (waNumber, tagIcons) ──────────────── */
+async function fetchPublicSettings() {
+  try {
+    const res  = await fetch('/api/settings');
+    const json = await res.json();
+    return json.ok ? json.data : {};
+  } catch {
+    return {};
+  }
+}
+
+/* ─── POST settings ─────────────────────────────────────────── */
+async function postSettings(payload) {
+  try {
+    const res  = await fetch('/api/settings', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+    const json = await res.json();
+    return json.ok;
+  } catch {
+    return false;
+  }
+}
+
+/* ─── Override getTagIcons() — ambil dari cache settings ─────── */
+// Di-populate saat init oleh app.js
+let _settingsCache = {};
+function getTagIcons() {
+  return _settingsCache.tagIcons || {};
+}
+function getTagIcon(name) {
+  return getTagIcons()[name] || null;
+}
+
+/* ════════════════════════════════════════════════════════════
+   FILTER & SORT (lokal, dari cache)
+   ════════════════════════════════════════════════════════════ */
+
+function getFilteredStocks({ query = '', game = 'all', sort = 'newest' } = {}) {
+  let stocks = [..._stockCache];
+
   if (game !== 'all') {
     stocks = stocks.filter(s => s.game === game);
   }
 
-  // filter search
   if (query) {
     const q = query.toLowerCase();
     stocks = stocks.filter(s => {
@@ -93,14 +136,13 @@ function getFilteredStocks({ query = '', game = 'all', sort = 'newest' } = {}) {
       return (
         gameStr.includes(q) ||
         ('akun ' + s.game.toLowerCase() + ' #' + s.no).includes(q) ||
-        (s.desc || '').toLowerCase().includes(q) ||
-        (s.bind || '').toLowerCase().includes(q) ||
+        (s.desc  || '').toLowerCase().includes(q) ||
+        (s.bind  || '').toLowerCase().includes(q) ||
         tagStr.includes(q)
       );
     });
   }
 
-  // sort
   if (sort === 'newest')     stocks.sort((a, b) => b.createdAt - a.createdAt);
   if (sort === 'price-asc')  stocks.sort((a, b) => a.price - b.price);
   if (sort === 'price-desc') stocks.sort((a, b) => b.price - a.price);
@@ -108,7 +150,10 @@ function getFilteredStocks({ query = '', game = 'all', sort = 'newest' } = {}) {
   return stocks;
 }
 
-/* ─── PHOTO BUFFER (sementara, sebelum disimpan) ───────────── */
+/* ════════════════════════════════════════════════════════════
+   PHOTO BUFFER (sementara, sebelum disimpan)
+   ════════════════════════════════════════════════════════════ */
+
 const photoBuffers = { ml: [], ff: [] };
 
 function handlePhotos(type, input) {
@@ -121,7 +166,7 @@ function handlePhotos(type, input) {
     };
     reader.readAsDataURL(f);
   });
-  input.value = ''; // reset input agar file yang sama bisa diupload lagi
+  input.value = '';
 }
 
 function removePhoto(type, idx) {
@@ -145,7 +190,7 @@ function resetPhotoBuffer(type) {
   renderPreviews(type);
 }
 
-/* ─── EDIT PHOTO BUFFER ─────────────────────────────────────── */
+/* ─── Edit photo buffer ─────────────────────────────────────── */
 let editPhotoBuffers = [];
 
 function handleEditPhotos(input) {
@@ -174,4 +219,20 @@ function renderEditPreviews() {
       <button class="preview-remove" onclick="removeEditPhoto(${i})">×</button>
     </div>
   `).join('');
+}
+
+/* ════════════════════════════════════════════════════════════
+   LOADING STATE helper
+   ════════════════════════════════════════════════════════════ */
+
+function setGridLoading(loading) {
+  const grid = document.getElementById('stock-grid');
+  if (!grid) return;
+  if (loading) {
+    grid.innerHTML = `
+      <div class="stock-no-result">
+        <i class="fa-solid fa-circle-notch fa-spin"></i>
+        MEMUAT STOK...
+      </div>`;
+  }
 }
