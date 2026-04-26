@@ -1,7 +1,7 @@
 /* ════════════════════════════════════════════════════════════
    api/stocks.js
-   GET  /api/stocks  → ambil semua stok
-   POST /api/stocks  → tambah stok baru
+   GET  /api/stocks  → ambil semua stok (TANPA foto, cepat)
+   POST /api/stocks  → tambah stok baru (foto disimpan terpisah)
    ════════════════════════════════════════════════════════════ */
 
 const UPSTASH_URL   = process.env.UPSTASH_REDIS_REST_URL;
@@ -30,13 +30,15 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    /* ── GET ──────────────────────────────────────────────── */
     if (req.method === 'GET') {
       const stocks = await redisGet('stocks') || [];
-      return res.status(200).json({ ok: true, data: stocks });
+      const light = stocks.map(({ photos, ...s }) => ({
+        ...s,
+        thumb: photos?.[0] || null,
+      }));
+      return res.status(200).json({ ok: true, data: light });
     }
 
-    /* ── POST ─────────────────────────────────────────────── */
     if (req.method === 'POST') {
       const { game, photos, price, desc, bind, tags } = req.body;
       if (!game || !photos || photos.length === 0)
@@ -44,14 +46,23 @@ export default async function handler(req, res) {
 
       const stocks   = await redisGet('stocks') || [];
       const sameGame = stocks.filter(s => s.game === game);
+      const id       = Date.now();
+
       const newStock = {
-        id: Date.now(), no: sameGame.length + 1,
-        game, photos, price: parseInt(price) || 0,
-        desc: desc || '', bind: bind || '', tags: tags || [],
-        createdAt: Date.now(),
+        id, no: sameGame.length + 1,
+        game,
+        price: parseInt(price) || 0,
+        desc:  desc  || '',
+        bind:  bind  || '',
+        tags:  tags  || [],
+        createdAt: id,
+        photoCount: photos.length,
       };
+
+      await redisSet(`photos:${id}`, photos);
       stocks.push(newStock);
       await redisSet('stocks', stocks);
+
       return res.status(200).json({ ok: true, data: newStock });
     }
 
